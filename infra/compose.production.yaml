@@ -32,9 +32,19 @@ services:
   backend:
     <<: *runtime
     image: ${BACKEND_IMAGE:?required}
-    env_file: /etc/vector/app.env
-    environment:
+    environment: &app-env
       DATABASE_URL: postgresql+psycopg://vector:${POSTGRES_PASSWORD}@db:5432/vector
+      STORAGE_PATH: /storage
+      FRONTEND_URL: ${FRONTEND_URL:?required}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY_HEADERS: "true"
+      WEBSITE_API_KEY: ${WEBSITE_API_KEY:?required}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURITY: ${SMTP_SECURITY:-none}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@vector.sabirov.tech}
     volumes: ["documents:/storage"]
     read_only: true
     tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777"]
@@ -51,9 +61,7 @@ services:
     <<: *runtime
     image: ${BACKEND_IMAGE:?required}
     command: python -m app.worker
-    env_file: /etc/vector/app.env
-    environment:
-      DATABASE_URL: postgresql+psycopg://vector:${POSTGRES_PASSWORD}@db:5432/vector
+    environment: *app-env
     volumes: ["documents:/storage"]
     read_only: true
     tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777"]
