@@ -472,11 +472,15 @@ function Workspace({ user }: { user: User }) {
         <div className="sidebar-bottom">
           <div className="demo-banner">
             <Sparkles size={18} />
-            <strong>Демонстрационная среда</strong>
+            <strong>
+              {import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "false"
+                ? "Демонстрационная LMS"
+                : "Демонстрационная среда"}
+            </strong>
             <p>
-              Синтетические данные.
-              <br />
-              Настоящие возможности.
+              {import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "false"
+                ? "Учебные результаты пока поступают из демоадаптера."
+                : "Синтетические данные для знакомства с системой."}
             </p>
           </div>
           <a
@@ -529,7 +533,9 @@ function Workspace({ user }: { user: User }) {
           <div className="topbar-actions">
             <span className="environment">
               <span className="live-dot" />
-              Демо
+              {import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "false"
+                ? "MVP"
+                : "Демо"}
             </span>
             <span className="topbar-date">
               {new Date().toLocaleDateString("ru-RU", {

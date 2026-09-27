@@ -4,3 +4,7 @@ __pycache__
 *.db
 storage
 openapi.json
+.env
+.env.*
+*.key
+*.pem
