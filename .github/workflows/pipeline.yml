@@ -45,7 +45,7 @@ jobs:
           alembic check
           alembic downgrade base
           alembic upgrade head
-          pytest -q
+          python -m pytest -q
       - name: Frontend and generated API types
         run: |
           npm ci --prefix frontend
