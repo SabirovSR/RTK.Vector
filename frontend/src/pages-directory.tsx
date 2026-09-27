@@ -87,7 +87,9 @@ export function UniversitiesPage({ user }: { user: User }) {
       (!region || u.region === region) &&
       (!profile || u.profile === profile) &&
       (!accreditation || u.accreditation === accreditation) &&
-      (u.details.directions || '').toLowerCase().includes(direction.toLowerCase()),
+      (u.details.directions || "")
+        .toLowerCase()
+        .includes(direction.toLowerCase()),
   );
   return (
     <>
@@ -453,15 +455,14 @@ export function ProgramsPage({ user }: { user: User }) {
   );
 }
 function Vendors({ onClose }: { onClose: () => void }) {
-  const data =
-    useData<
-      Array<{
-        id: number;
-        company: string;
-        product: string;
-        contact: Record<string, string>;
-      }>
-    >("/vendors");
+  const data = useData<
+    Array<{
+      id: number;
+      company: string;
+      product: string;
+      contact: Record<string, string>;
+    }>
+  >("/vendors");
   return (
     <Modal title="Вендоры и цифровые инструменты" onClose={onClose}>
       {data.error && <ErrorState error={data.error} />}{" "}
@@ -559,16 +560,44 @@ export function TasksPage({ user }: { user: User }) {
             >
               {date(t.due)}
             </span>
-            {user.role === 'school' && t.editable && <button className="icon-button" aria-label="Редактировать задачу" onClick={() => setEditing(t)}><Pencil size={15}/></button>}
+            {user.role === "school" && t.editable && (
+              <button
+                className="icon-button"
+                aria-label="Редактировать задачу"
+                onClick={() => setEditing(t)}
+              >
+                <Pencil size={15} />
+              </button>
+            )}
           </div>
         ))}
         {!items.length && <Empty>Здесь пока нет задач</Empty>}
       </Section>
-      {editing && <Editor title="Редактировать задачу" fields={[
-        {name:'title',label:'Что нужно сделать'},
-        {name:'due',label:'Срок',type:'date'},
-        {name:'audience',label:'Для кого',type:'select',options:[{value:'school',label:'ИТ-школа'},{value:'university',label:'Менеджер вуза'}]},
-      ]} initial={{title:editing.title,due:editing.due,audience:editing.audience}} onClose={()=>setEditing(null)} onSave={v=>save('/tasks/'+editing.id,'PUT',v)}/>}
+      {editing && (
+        <Editor
+          title="Редактировать задачу"
+          fields={[
+            { name: "title", label: "Что нужно сделать" },
+            { name: "due", label: "Срок", type: "date" },
+            {
+              name: "audience",
+              label: "Для кого",
+              type: "select",
+              options: [
+                { value: "school", label: "ИТ-школа" },
+                { value: "university", label: "Менеджер вуза" },
+              ],
+            },
+          ]}
+          initial={{
+            title: editing.title,
+            due: editing.due,
+            audience: editing.audience,
+          }}
+          onClose={() => setEditing(null)}
+          onSave={(v) => save("/tasks/" + editing.id, "PUT", v)}
+        />
+      )}
     </>
   );
 }
@@ -655,15 +684,20 @@ export function IntegrationsPage() {
       <div className="integration-grid">
         <Section title="Почта">
           <Mail className="purple-text" size={30} />
-          <p>Приглашения и уведомления доставляются в локальный Mailpit.</p>
-          <a
-            className="text-link"
-            href="http://localhost:8025"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Открыть Mailpit <ArrowUpRight size={15} />
-          </a>
+          <p>
+            Приглашения и уведомления передаются настроенному SMTP-серверу.
+            Статус отправки и ошибки отображаются ниже.
+          </p>
+          {import.meta.env.VITE_SHOW_DEMO_CREDENTIALS !== "false" && (
+            <a
+              className="text-link"
+              href="http://localhost:8025"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Открыть Mailpit <ArrowUpRight size={15} />
+            </a>
+          )}
         </Section>
         <Section title="Учебная платформа">
           <BookOpen className="purple-text" size={30} />
@@ -675,7 +709,16 @@ export function IntegrationsPage() {
         <Section title="Заявки с сайта">
           <Network className="purple-text" size={30} />
           <p>Приём заявок через API с сервисным ключом и защитой от дублей.</p>
-          <a href="/api/v1/openapi.json" className="text-link">
+          <a
+            href={
+              import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "false"
+                ? "https://github.com/SabirovSR/RTK.Vector/blob/main/backend/openapi.json"
+                : "/api/v1/openapi.json"
+            }
+            className="text-link"
+            target="_blank"
+            rel="noreferrer"
+          >
             Контракт OpenAPI <ArrowUpRight size={15} />
           </a>
         </Section>

@@ -274,7 +274,7 @@ def invite(
     if db.scalar(select(User).where(User.email == email)):
         fail("Этот email уже зарегистрирован", 409)
     send_token(db, email, "invite", ident, user.id)
-    return {"message": "Приглашение поставлено в очередь. Письмо доступно в Mailpit."}
+    return {"message": "Приглашение поставлено в очередь отправки."}
 
 
 @app.get(PREFIX + "/universities/{ident}/contacts")
