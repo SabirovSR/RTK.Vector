@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+exec 9>/run/lock/vector-deploy.lock
+flock -w 600 9
+command=${1:-}
+if [[ ! "$command" =~ ^deploy\ ([a-f0-9]{40})\ (sha256:[a-f0-9]{64})\ (sha256:[a-f0-9]{64})$ ]]; then
+  printf 'Only an immutable application deployment is allowed.\n' >&2
+  exit 2
+fi
+release=${BASH_REMATCH[1]}
+backend_digest=${BASH_REMATCH[2]}
+frontend_digest=${BASH_REMATCH[3]}
+read -r registry_token
+test -n "$registry_token"
+config=$(mktemp -d /run/vector-docker.XXXXXX)
+trap 'rm -rf -- "$config"' EXIT
+printf '%s' "$registry_token" | docker --config "$config" login ghcr.io -u SabirovSR --password-stdin >/dev/null
+unset registry_token
+backend_image="ghcr.io/sabirovsr/rtk-vector-backend@$backend_digest"
+frontend_image="ghcr.io/sabirovsr/rtk-vector-frontend@$frontend_digest"
+docker --config "$config" pull "$backend_image"
+docker --config "$config" pull "$frontend_image"
+cd /opt/vector
+compose=(docker compose --env-file /etc/vector/app.env --env-file /etc/vector/release.env -f /opt/vector/compose.production.yaml)
+if [ -s /etc/vector/release.env ]; then
+  /usr/local/sbin/vector-backup
+  cp /etc/vector/release.env /etc/vector/previous-release.env
+fi
+printf 'BACKEND_IMAGE=%s\nFRONTEND_IMAGE=%s\nRELEASE_SHA=%s\n' "$backend_image" "$frontend_image" "$release" > /etc/vector/release.env
+if "${compose[@]}" up -d --wait --wait-timeout 180 && curl --fail --silent --max-time 20 http://127.0.0.1:8080/api/v1/health >/dev/null; then
+  date --iso-8601=seconds > /var/lib/vector-backup/last-deploy
+  printf 'Deployment healthy: %s\n' "$release"
+else
+  printf 'Deployment failed; restoring previous application images.\n' >&2
+  if [ -s /etc/vector/previous-release.env ]; then
+    cp /etc/vector/previous-release.env /etc/vector/release.env
+    "${compose[@]}" up -d --wait --wait-timeout 180
+  fi
+  exit 1
+fi

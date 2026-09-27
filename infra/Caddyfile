@@ -1,0 +1,17 @@
+{
+    email savelij.sabirov.2016@gmail.com
+    admin localhost:2019
+}
+
+vector.sabirov.tech {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+    @private path /api/v1/docs* /api/v1/openapi.json
+    respond @private 404
+    reverse_proxy 127.0.0.1:8080
+}

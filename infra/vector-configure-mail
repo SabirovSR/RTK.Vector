@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Run interactively as root. Secrets never enter shell arguments/history."""
+import getpass
+import os
+from pathlib import Path
+import smtplib
+import ssl
+import subprocess
+
+if os.geteuid() != 0:
+    raise SystemExit("Run with sudo")
+host = input("SMTP host [smtp.yandex.ru]: ").strip() or "smtp.yandex.ru"
+port = int(input("SMTP port [465]: ").strip() or "465")
+mode = input("TLS mode ssl/starttls [ssl]: ").strip() or "ssl"
+if mode not in {"ssl", "starttls"}:
+    raise SystemExit("Only verified TLS is supported")
+username = input("SMTP username (full email for Yandex): ").strip()
+password = getpass.getpass("Application password (hidden): ")
+sender = input(f"From email [{username}]: ").strip() or username
+if not username or not password or "@" not in sender:
+    raise SystemExit("Incomplete settings")
+# Validate authentication without sending any message.
+client = smtplib.SMTP_SSL if mode == "ssl" else smtplib.SMTP
+options = dict(host=host, port=port, timeout=20)
+if mode == "ssl":
+    options["context"] = ssl.create_default_context()
+try:
+    with client(**options) as smtp:
+        if mode == "starttls":
+            smtp.starttls(context=ssl.create_default_context())
+        smtp.login(username, password)
+except Exception:
+    raise SystemExit("SMTP connection or authentication failed; settings were not changed") from None
+
+values = dict(SMTP_HOST=host, SMTP_PORT=str(port), SMTP_SECURITY=mode,
+              SMTP_USERNAME=username, SMTP_PASSWORD=password, MAIL_FROM=sender)
+# Compose single-quoted values are literal, including dollar signs.
+if any("\n" in value or "\r" in value or "'" in value or "\\" in value for value in values.values()):
+    raise SystemExit("Unsupported characters in settings")
+path = Path("/etc/vector/app.env")
+lines = [line for line in path.read_text().splitlines() if line.split("=", 1)[0] not in values]
+lines += [f"{key}='{value}'" for key, value in values.items()]
+temp = path.with_suffix(".tmp")
+temp.touch(mode=0o600, exist_ok=False)
+temp.write_text("\n".join(lines) + "\n")
+temp.replace(path)
+subprocess.run(["docker", "compose", "--env-file", str(path), "--env-file", "/etc/vector/release.env",
+                "-f", "/opt/vector/compose.production.yaml", "up", "-d", "backend", "worker"], check=True)
+print("SMTP authenticated and configured. No test email was sent. New invitations use this provider.")

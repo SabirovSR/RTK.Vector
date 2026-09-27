@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+curl --fail --silent --max-time 20 http://127.0.0.1:8080/api/v1/health >/dev/null
+usage=$(df --output=pcent / | tail -1 | tr -dc '0-9')
+if (( usage > 85 )); then logger -p daemon.err 'RTK Vector disk usage above 85%'; exit 1; fi
+if [ -f /var/lib/vector-backup/last-success ]; then
+  age=$(( $(date +%s) - $(stat -c %Y /var/lib/vector-backup/last-success) ))
+  if (( age > 93600 )); then logger -p daemon.err 'RTK Vector backup older than 26 hours'; exit 1; fi
+fi
+test -f /var/lib/vector-backup/last-success || { logger -p daemon.err 'RTK Vector has no successful backup'; exit 1; }

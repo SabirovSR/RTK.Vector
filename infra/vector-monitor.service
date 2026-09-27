@@ -1,0 +1,5 @@
+[Unit]
+Description=RTK Vector local health and backup checks
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vector-monitor

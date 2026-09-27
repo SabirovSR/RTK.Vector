@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+export RESTIC_REPOSITORY=/var/backups/vector/restic
+export RESTIC_PASSWORD_FILE=/etc/vector/restic-password
+exec 8>/run/lock/vector-backup.lock
+flock -w 120 8
+temp=$(mktemp -d /var/lib/vector-backup/snapshot.XXXXXX)
+trap 'rm -rf -- "$temp"' EXIT
+compose=(docker compose --env-file /etc/vector/app.env --env-file /etc/vector/release.env -f /opt/vector/compose.production.yaml)
+"${compose[@]}" exec -T db pg_dump -U vector -Fc vector > "$temp/database.dump"
+document_path=$(docker volume inspect vector_documents --format '{{ .Mountpoint }}')
+test -d "$document_path"
+tar -czf "$temp/documents.tar.gz" -C "$document_path" .
+cp /etc/vector/app.env /etc/vector/release.env "$temp/"
+if [ ! -s "$RESTIC_REPOSITORY/config" ]; then restic init; fi
+# Use stable archive paths so retention groups snapshots correctly.
+(cd "$temp" && restic backup --tag vector --host vector-production .)
+restic forget --tag vector --group-by host,tags --keep-daily 7 --keep-weekly 4 --keep-monthly 3 --prune
+date --iso-8601=seconds > /var/lib/vector-backup/last-success

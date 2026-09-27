@@ -1,0 +1,91 @@
+name: vector
+x-runtime: &runtime
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  db:
+    <<: *runtime
+    image: postgres:16-alpine
+    user: "70:70"
+    environment:
+      POSTGRES_DB: vector
+      POSTGRES_USER: vector
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    read_only: true
+    tmpfs: ["/tmp", "/var/run/postgresql:uid=70,gid=70,mode=0770"]
+    shm_size: 128mb
+    mem_limit: 768m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vector -d vector"]
+      interval: 5s
+      retries: 20
+  backend:
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?required}
+    env_file: /etc/vector/app.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://vector:${POSTGRES_PASSWORD}@db:5432/vector
+    volumes: ["documents:/storage"]
+    read_only: true
+    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777"]
+    mem_limit: 640m
+    cpus: 1.0
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      start_period: 30s
+      retries: 12
+  worker:
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?required}
+    command: python -m app.worker
+    env_file: /etc/vector/app.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://vector:${POSTGRES_PASSWORD}@db:5432/vector
+    volumes: ["documents:/storage"]
+    read_only: true
+    tmpfs: ["/tmp:uid=1000,gid=1000,mode=1777"]
+    mem_limit: 384m
+    cpus: 0.5
+    depends_on:
+      backend: {condition: service_healthy}
+  frontend:
+    <<: *runtime
+    image: ${FRONTEND_IMAGE:?required}
+    ports: ["127.0.0.1:8080:8080"]
+    read_only: true
+    tmpfs: ["/tmp:uid=101,gid=101,mode=1777"]
+    mem_limit: 128m
+    cpus: 0.5
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      retries: 5
+  mailpit:
+    <<: *runtime
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:8025:8025"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    mem_limit: 128m
+    cpus: 0.25
+    environment:
+      MP_MAX_MESSAGES: 200
+      MP_DATABASE: /tmp/mailpit.db
+
+volumes:
+  postgres_data:
+    name: vector_postgres_data
+  documents:
+    name: vector_documents
