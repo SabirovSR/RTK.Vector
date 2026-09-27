@@ -15,6 +15,7 @@ from .schemas import *
 from .security import *
 from .domain import *
 from .imports import parse_import, prepare_import, apply_import, phone
+from .emails import token_payload
 
 app = FastAPI(
     title="РТК Вектор API",
@@ -58,7 +59,7 @@ async def security_headers(request, call_next):
 
 
 @app.get(PREFIX + "/health")
-def health(db=Depends(get_db)):
+def health(db=Depends(get_db, scope="function")):
     db.execute(text("SELECT 1"))
     return {"status": "ok"}
 
@@ -79,7 +80,12 @@ def limit(db, key, maximum=10):
 
 
 @app.post(PREFIX + "/auth/login")
-def login(body: Login, request: Request, response: Response, db=Depends(get_db)):
+def login(
+    body: Login,
+    request: Request,
+    response: Response,
+    db=Depends(get_db, scope="function"),
+):
     limit(db, "login:" + digest(body.email.lower()))
     client_ip = request.client.host
     # Enable only behind the private nginx listener and trusted Caddy ingress.
@@ -132,7 +138,10 @@ def me(request: Request, user=Depends(current_user)):
 
 @app.post(PREFIX + "/auth/logout")
 def logout(
-    request: Request, response: Response, user=Depends(current_user), db=Depends(get_db)
+    request: Request,
+    response: Response,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     db.delete(request.state.session)
     response.delete_cookie("vector_session")
@@ -160,19 +169,13 @@ def send_token(db, email, kind, university_id=None, owner_id=None):
         Job(
             kind="email",
             owner_id=owner_id,
-            payload={
-                "to": email,
-                "subject": "РТК Вектор — приглашение"
-                if kind == "invite"
-                else "РТК Вектор — восстановление доступа",
-                "body": f"{FRONTEND_URL}/accept?token={raw}",
-            },
+            payload=token_payload(email, kind, f"{FRONTEND_URL}/accept?token={raw}"),
         )
     )
 
 
 @app.post(PREFIX + "/auth/forgot")
-def forgot(body: EmailInput, db=Depends(get_db)):
+def forgot(body: EmailInput, db=Depends(get_db, scope="function")):
     email = body.email.lower()
     limit(db, "reset:" + digest(email), 5)
     if db.scalar(select(User).where(User.email == email, User.active.is_(True))):
@@ -181,7 +184,7 @@ def forgot(body: EmailInput, db=Depends(get_db)):
 
 
 @app.post(PREFIX + "/auth/accept")
-def accept(body: AcceptToken, db=Depends(get_db)):
+def accept(body: AcceptToken, db=Depends(get_db, scope="function")):
     token = db.scalar(
         select(Token).where(Token.token == digest(body.token)).with_for_update()
     )
@@ -217,7 +220,7 @@ def universities(
     accreditation: str = "",
     direction: str = "",
     user=Depends(current_user),
-    db=Depends(get_db),
+    db=Depends(get_db, scope="function"),
 ):
     query = select(University).order_by(University.name)
     if user.role == "university":
@@ -244,7 +247,9 @@ def universities(
 
 @app.post(PREFIX + "/universities")
 def create_university(
-    body: UniversityInput, user=Depends(current_user), db=Depends(get_db)
+    body: UniversityInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     school(user)
     obj = University(**body.model_dump(), owner_id=user.id)
@@ -255,7 +260,10 @@ def create_university(
 
 @app.put(PREFIX + "/universities/{ident}")
 def edit_university(
-    ident: int, body: UniversityInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: UniversityInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = uni_access(db, user, ident, True)
     for key, value in body.model_dump().items():
@@ -266,7 +274,10 @@ def edit_university(
 
 @app.post(PREFIX + "/universities/{ident}/invite")
 def invite(
-    ident: int, body: EmailInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: EmailInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     school(user)
     uni_access(db, user, ident, True)
@@ -274,18 +285,23 @@ def invite(
     if db.scalar(select(User).where(User.email == email)):
         fail("Этот email уже зарегистрирован", 409)
     send_token(db, email, "invite", ident, user.id)
-    return {"message": "Приглашение поставлено в очередь. Письмо доступно в Mailpit."}
+    return {"message": "Приглашение поставлено в очередь отправки."}
 
 
 @app.get(PREFIX + "/universities/{ident}/contacts")
-def contacts(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def contacts(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     uni_access(db, user, ident)
     return list(db.scalars(select(Contact).where(Contact.university_id == ident)))
 
 
 @app.post(PREFIX + "/universities/{ident}/contacts")
 def add_contact(
-    ident: int, body: ContactInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: ContactInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     uni_access(db, user, ident, True)
     email = body.email.lower()
@@ -304,7 +320,10 @@ def add_contact(
 
 @app.put(PREFIX + "/contacts/{ident}")
 def edit_contact(
-    ident: int, body: ContactInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: ContactInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = record(db, Contact, ident)
     uni_access(db, user, obj.university_id, True)
@@ -325,12 +344,14 @@ def edit_contact(
 
 
 @app.get(PREFIX + "/programs")
-def programs(user=Depends(current_user), db=Depends(get_db)):
+def programs(user=Depends(current_user), db=Depends(get_db, scope="function")):
     return list(db.scalars(select(Program).order_by(Program.id)))
 
 
 @app.post(PREFIX + "/programs")
-def create_program(body: ProgramInput, user=Depends(current_user), db=Depends(get_db)):
+def create_program(
+    body: ProgramInput, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     school(user)
     obj = Program(**body.model_dump())
     db.add(obj)
@@ -339,13 +360,13 @@ def create_program(body: ProgramInput, user=Depends(current_user), db=Depends(ge
 
 
 @app.get(PREFIX + "/vendors")
-def vendors(user=Depends(current_user), db=Depends(get_db)):
+def vendors(user=Depends(current_user), db=Depends(get_db, scope="function")):
     school(user)
     return list(db.scalars(select(Vendor)))
 
 
 @app.get(PREFIX + "/deals")
-def deals(user=Depends(current_user), db=Depends(get_db)):
+def deals(user=Depends(current_user), db=Depends(get_db, scope="function")):
     query = (
         select(Deal).where(Deal.owner_id == user.id)
         if user.role == "school"
@@ -358,7 +379,9 @@ def deals(user=Depends(current_user), db=Depends(get_db)):
 
 
 @app.post(PREFIX + "/deals")
-def create_deal(body: DealInput, user=Depends(current_user), db=Depends(get_db)):
+def create_deal(
+    body: DealInput, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     school(user)
     uni_access(db, user, body.university_id, True)
     record(db, Program, body.program_id)
@@ -369,7 +392,9 @@ def create_deal(body: DealInput, user=Depends(current_user), db=Depends(get_db))
 
 
 @app.get(PREFIX + "/deals/{ident}")
-def deal_detail(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def deal_detail(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     obj = deal_access(db, user, ident)
     activities = select(Activity).where(Activity.deal_id == ident)
     tasks = select(Task).where(Task.deal_id == ident)
@@ -403,7 +428,10 @@ def deal_detail(ident: int, user=Depends(current_user), db=Depends(get_db)):
 
 @app.put(PREFIX + "/deals/{ident}")
 def edit_deal(
-    ident: int, body: DealEdit, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: DealEdit,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = deal_access(db, user, ident, True, True)
     if obj.stage in ("completed", "rejected"):
@@ -416,7 +444,10 @@ def edit_deal(
 
 @app.post(PREFIX + "/deals/{ident}/transition")
 def transition(
-    ident: int, body: Transition, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: Transition,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = deal_access(db, user, ident, True, True)
     validate_transition(db, obj, body.stage, body.reason)
@@ -441,7 +472,12 @@ def transition(
 
 
 @app.post(PREFIX + "/deals/{ident}/proposals")
-def proposal(ident: int, body: Content, user=Depends(current_user), db=Depends(get_db)):
+def proposal(
+    ident: int,
+    body: Content,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
     deal = deal_access(db, user, ident, True, True)
     if deal.stage not in ("new", "qualification", "approval"):
         fail("Верните сделку на согласование перед новой версией", 409)
@@ -456,7 +492,12 @@ def proposal(ident: int, body: Content, user=Depends(current_user), db=Depends(g
 
 
 @app.post(PREFIX + "/proposals/{ident}/decision")
-def decide(ident: int, body: Decision, user=Depends(current_user), db=Depends(get_db)):
+def decide(
+    ident: int,
+    body: Decision,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
     university_role(user)
     obj = record(db, Proposal, ident)
     deal = deal_access(db, user, obj.deal_id, lock=True)
@@ -491,7 +532,10 @@ def decide(ident: int, body: Decision, user=Depends(current_user), db=Depends(ge
 
 @app.post(PREFIX + "/deals/{ident}/comments")
 def comment(
-    ident: int, body: TextInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TextInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     deal = deal_access(db, user, ident)
     obj = Activity(
@@ -510,7 +554,10 @@ def comment(
 
 @app.post(PREFIX + "/deals/{ident}/communications")
 def communication(
-    ident: int, body: Communication, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: Communication,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     deal = deal_access(db, user, ident, True)
     obj = Activity(
@@ -547,7 +594,7 @@ def communication(
 
 
 @app.get(PREFIX + "/tasks")
-def tasks(user=Depends(current_user), db=Depends(get_db)):
+def tasks(user=Depends(current_user), db=Depends(get_db, scope="function")):
     query = select(Task, Deal.title).join(Deal)
     if user.role == "university":
         query = query.where(
@@ -567,7 +614,10 @@ def tasks(user=Depends(current_user), db=Depends(get_db)):
 
 @app.post(PREFIX + "/deals/{ident}/tasks")
 def create_task(
-    ident: int, body: TaskInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TaskInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     deal = deal_access(db, user, ident, True)
     obj = Task(deal_id=ident, owner_id=user.id, **body.model_dump())
@@ -580,7 +630,10 @@ def create_task(
 
 @app.patch(PREFIX + "/tasks/{ident}")
 def task_status(
-    ident: int, body: TaskStatus, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TaskStatus,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = record(db, Task, ident)
     if user.role == "school" and obj.owner_id != user.id:
@@ -595,7 +648,10 @@ def task_status(
 
 @app.put(PREFIX + "/tasks/{ident}")
 def edit_task(
-    ident: int, body: TaskInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TaskInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     school(user)
     obj = record(db, Task, ident, True)
@@ -623,7 +679,7 @@ async def upload_document(
     kind: str = Form("material"),
     file: UploadFile = File(...),
     user=Depends(current_user),
-    db=Depends(get_db),
+    db=Depends(get_db, scope="function"),
 ):
     deal_access(db, user, ident, lock=True)
     if kind not in ("material", "contract", "signed_contract"):
@@ -670,7 +726,9 @@ async def upload_document(
 
 
 @app.get(PREFIX + "/documents/{ident}/download")
-def download(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def download(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     obj = record(db, Document, ident)
     deal_access(db, user, obj.deal_id)
     path = STORAGE / obj.path
@@ -681,7 +739,10 @@ def download(ident: int, user=Depends(current_user), db=Depends(get_db)):
 
 @app.post(PREFIX + "/deals/{ident}/groups")
 def create_group(
-    ident: int, body: NameInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: NameInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     deal = deal_access(db, user, ident, lock=True)
     if deal.stage in ("training", "evaluation", "completed", "rejected"):
@@ -693,7 +754,9 @@ def create_group(
 
 
 @app.get(PREFIX + "/groups/{ident}/participants")
-def participants(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def participants(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     group_access(db, user, ident, personal=True)
     return [
         public(p)
@@ -708,7 +771,10 @@ def participants(ident: int, user=Depends(current_user), db=Depends(get_db)):
 
 @app.post(PREFIX + "/groups/{ident}/participants")
 def add_participant(
-    ident: int, body: ParticipantInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: ParticipantInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     group = group_access(db, user, ident, True, True)
     obj = Participant(
@@ -726,7 +792,10 @@ def add_participant(
 
 @app.put(PREFIX + "/participants/{ident}")
 def edit_participant(
-    ident: int, body: ParticipantInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: ParticipantInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = record(db, Participant, ident)
     group = group_access(db, user, obj.group_id, True, True)
@@ -740,7 +809,9 @@ def edit_participant(
 
 
 @app.post(PREFIX + "/groups/{ident}/confirm")
-def confirm_group(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def confirm_group(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     group = group_access(db, user, ident, True, True)
     if not db.scalar(
         select(Participant.id).where(
@@ -759,7 +830,7 @@ async def import_people(
     file: UploadFile = File(...),
     commit: bool = Form(False),
     user=Depends(current_user),
-    db=Depends(get_db),
+    db=Depends(get_db, scope="function"),
 ):
     group = group_access(db, user, ident, True, True)
     data = await read_upload(file)
@@ -787,7 +858,9 @@ async def import_people(
 
 
 @app.post(PREFIX + "/groups/{ident}/sync")
-def sync_group(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def sync_group(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     group = group_access(db, user, ident)
     group = record(db, Group, ident, True)
     if not group.started:
@@ -813,7 +886,9 @@ def sync_group(ident: int, user=Depends(current_user), db=Depends(get_db)):
 
 
 @app.get(PREFIX + "/participants/{ident}/certificate")
-def certificate(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def certificate(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     person = record(db, Participant, ident)
     group_access(db, user, person.group_id, personal=True)
     result = db.scalar(select(Result).where(Result.participant_id == ident))
@@ -858,7 +933,10 @@ def certificate(ident: int, user=Depends(current_user), db=Depends(get_db)):
 
 @app.post(PREFIX + "/deals/{ident}/feedback")
 def feedback(
-    ident: int, body: TextInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TextInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     university_role(user)
     deal = deal_access(db, user, ident)
@@ -875,7 +953,10 @@ def feedback(
 
 @app.post(PREFIX + "/deals/{ident}/expansions")
 def expansion(
-    ident: int, body: TextInput, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: TextInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     university_role(user)
     deal = deal_access(db, user, ident)
@@ -888,7 +969,10 @@ def expansion(
 
 @app.post(PREFIX + "/expansions/{ident}/accept")
 def accept_expansion(
-    ident: int, body: ExpansionAccept, user=Depends(current_user), db=Depends(get_db)
+    ident: int,
+    body: ExpansionAccept,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
 ):
     obj = record(db, Expansion, ident, True)
     old = deal_access(db, user, obj.deal_id, True)
@@ -911,7 +995,7 @@ def accept_expansion(
 
 
 @app.get(PREFIX + "/notifications")
-def notifications(user=Depends(current_user), db=Depends(get_db)):
+def notifications(user=Depends(current_user), db=Depends(get_db, scope="function")):
     return list(
         db.scalars(
             select(Notification)
@@ -923,7 +1007,9 @@ def notifications(user=Depends(current_user), db=Depends(get_db)):
 
 
 @app.post(PREFIX + "/notifications/{ident}/read")
-def read_notification(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def read_notification(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     obj = record(db, Notification, ident)
     if obj.user_id != user.id:
         fail("Запись не найдена", 404)
@@ -932,7 +1018,7 @@ def read_notification(ident: int, user=Depends(current_user), db=Depends(get_db)
 
 
 @app.get(PREFIX + "/jobs")
-def jobs(user=Depends(current_user), db=Depends(get_db)):
+def jobs(user=Depends(current_user), db=Depends(get_db, scope="function")):
     return [
         public(j, ("payload",))
         for j in db.scalars(
@@ -942,7 +1028,9 @@ def jobs(user=Depends(current_user), db=Depends(get_db)):
 
 
 @app.post(PREFIX + "/jobs/{ident}/retry")
-def retry_job(ident: int, user=Depends(current_user), db=Depends(get_db)):
+def retry_job(
+    ident: int, user=Depends(current_user), db=Depends(get_db, scope="function")
+):
     obj = record(db, Job, ident, True)
     if obj.owner_id != user.id:
         fail("Запись не найдена", 404)
@@ -985,12 +1073,12 @@ def report_data(db, user):
 
 
 @app.get(PREFIX + "/reports")
-def reports(user=Depends(current_user), db=Depends(get_db)):
+def reports(user=Depends(current_user), db=Depends(get_db, scope="function")):
     return report_data(db, user)
 
 
 @app.get(PREFIX + "/reports/export")
-def report_export(user=Depends(current_user), db=Depends(get_db)):
+def report_export(user=Depends(current_user), db=Depends(get_db, scope="function")):
     school(user)
     stream = io.StringIO()
     writer = csv.writer(stream, delimiter=";")
@@ -1024,7 +1112,9 @@ def report_export(user=Depends(current_user), db=Depends(get_db)):
 
 
 @app.post(PREFIX + "/integrations/website/applications")
-def website(body: WebsiteApplication, request: Request, db=Depends(get_db)):
+def website(
+    body: WebsiteApplication, request: Request, db=Depends(get_db, scope="function")
+):
     expected = os.getenv("WEBSITE_API_KEY", "")
     if not expected or not secrets.compare_digest(
         request.headers.get("X-Service-Key", ""), expected

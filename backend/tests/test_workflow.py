@@ -267,7 +267,7 @@ def test_rate_limit():
 
 def extract_token(db):
     job = db.scalar(select(Job).order_by(Job.id.desc()))
-    return job.payload["body"].split("token=")[1]
+    return job.payload["action_url"].split("token=")[1]
 
 
 def test_invitation_and_reset(school):

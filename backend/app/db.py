@@ -32,6 +32,7 @@ class Base(DeclarativeBase):
 
 
 def get_db():
+    """Use Depends(get_db, scope='function') so commit precedes HTTP success."""
     with SessionLocal() as db:
         try:
             yield db

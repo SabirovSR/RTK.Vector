@@ -18,7 +18,7 @@ def fail(detail, code=400):
     raise HTTPException(code, detail)
 
 
-def current_user(request: Request, db=Depends(get_db)):
+def current_user(request: Request, db=Depends(get_db, scope="function")):
     raw = request.cookies.get("vector_session", "")
     session = db.scalar(
         select(Session).where(Session.token == digest(raw), Session.expires > now())
@@ -78,6 +78,16 @@ def notify(db, deal, text, role):
                 payload={
                     "to": user.email,
                     "subject": "РТК Вектор — обновление сотрудничества",
+                    "title": "Новости сотрудничества",
+                    "paragraphs": [
+                        text,
+                        "Откройте карточку сотрудничества, чтобы посмотреть изменения и следующие действия.",
+                    ],
+                    "action_label": "Открыть сотрудничество",
+                    "action_url": os.getenv(
+                        "FRONTEND_URL", "http://localhost:5173"
+                    ).rstrip("/")
+                    + f"/deals/{deal.id}",
                     "body": text
                     + "\n"
                     + os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
