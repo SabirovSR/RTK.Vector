@@ -78,6 +78,16 @@ def notify(db, deal, text, role):
                 payload={
                     "to": user.email,
                     "subject": "РТК Вектор — обновление сотрудничества",
+                    "title": "Новости сотрудничества",
+                    "paragraphs": [
+                        text,
+                        "Откройте карточку сотрудничества, чтобы посмотреть изменения и следующие действия.",
+                    ],
+                    "action_label": "Открыть сотрудничество",
+                    "action_url": os.getenv(
+                        "FRONTEND_URL", "http://localhost:5173"
+                    ).rstrip("/")
+                    + f"/deals/{deal.id}",
                     "body": text
                     + "\n"
                     + os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")

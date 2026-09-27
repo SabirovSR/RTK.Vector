@@ -52,6 +52,25 @@ ssh -N -i "$env:USERPROFILE\.ssh\rtk_vector_admin" -L 8025:127.0.0.1:8025 vector
 Официальная инструкция: https://yandex.ru/support/yandex-360/customers/mail/ru/mail-clients/others.
 Другой SMTP также поддерживается: SSL или обязательный STARTTLS с проверкой сертификата. Для внешней SMTP-авторизации незашифрованное соединение запрещено.
 
+### Отправитель noreply@vector.sabirov.tech через Яндекс 360
+
+Обычный личный ящик Яндекса не создаёт адрес на вашем домене. В Яндекс 360 подключите именно `vector.sabirov.tech`, подтвердите владение и создайте сотрудника/ящик `noreply`. Выберите ручную настройку DNS, чтобы сохранить текущую зону Cloudflare.
+
+В зоне **sabirov.tech** записи для этого поддомена имеют следующие имена:
+
+- MX: `vector` → `mx.yandex.net`, приоритет 10.
+- TXT SPF: `vector` → `v=spf1 redirect=_spf.yandex.net` (ровно одна SPF-запись для этого имени).
+- TXT DKIM: `mail._domainkey.vector` → уникальное значение из панели Яндекс 360.
+- TXT подтверждения владения: имя и значение из панели Яндекса; при обозначении `@` для подключаемого `vector.sabirov.tech` в родительской зоне используйте имя `vector`.
+
+Не заменяйте MX/SPF для `@` всей зоны `sabirov.tech`: там уже используется Cloudflare Email Routing. A-запись `vector` для сайта остаётся прежней. После проверки SPF и DKIM можно добавить DMARC для `_dmarc.vector`, например `v=DMARC1; p=quarantine; adkim=r; aspf=r`.
+
+Официальная инструкция DNS: https://yandex.ru/support/yandex-360/business/admin/ru/domains/dns/.
+
+Войдите в новый доменный ящик, разрешите почтовые программы и создайте **его собственный** пароль приложения. Запустите `sudo /usr/local/sbin/vector-configure-mail`: сервер `smtp.yandex.ru`, порт `465`, режим `ssl`, логин и From `noreply@vector.sabirov.tech`. Пароль личного ящика `Corner1233@yandex.ru` для нового ящика не подходит. До успешной проверки настройки работающего SMTP сохраняются.
+
+Письма содержат HTML и текстовую альтернативу, имя отправителя «РТК Вектор», кнопку, обычную ссылку и срок её действия. Предпросмотр синтетических писем: `python scripts/preview-emails.py`; файлы появятся в `frontend/test-results/email-preview`. Одноразовые ссылки из рабочих писем не добавляйте в отчёты и репозиторий.
+
 ## Резервные копии и восстановление
 
 `vector-backup.timer` ежедневно в 03:15 UTC (+ до 10 минут) сохраняет pg_dump, документы и настройки в зашифрованный restic repository `/var/backups/vector/restic`. Хранятся 7 дневных, 4 недельных и 3 месячных копии. Пароль — `/etc/vector/restic-password`; его резервная копия на компьютере владельца, отдельно от данных. Перед каждым релизом также выполняется backup.

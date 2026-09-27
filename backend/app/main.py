@@ -15,6 +15,7 @@ from .schemas import *
 from .security import *
 from .domain import *
 from .imports import parse_import, prepare_import, apply_import, phone
+from .emails import token_payload
 
 app = FastAPI(
     title="РТК Вектор API",
@@ -168,13 +169,7 @@ def send_token(db, email, kind, university_id=None, owner_id=None):
         Job(
             kind="email",
             owner_id=owner_id,
-            payload={
-                "to": email,
-                "subject": "РТК Вектор — приглашение"
-                if kind == "invite"
-                else "РТК Вектор — восстановление доступа",
-                "body": f"{FRONTEND_URL}/accept?token={raw}",
-            },
+            payload=token_payload(email, kind, f"{FRONTEND_URL}/accept?token={raw}"),
         )
     )
 

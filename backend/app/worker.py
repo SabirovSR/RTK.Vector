@@ -2,7 +2,7 @@ import os
 import time
 import smtplib
 import ssl
-from email.message import EmailMessage
+from .emails import build_message
 from sqlalchemy import select, delete
 from .db import SessionLocal, now
 from .models import Job, Participant, Result, LoginAttempt
@@ -43,12 +43,7 @@ def run_once(kind=None):
         try:
             with db.begin_nested():
                 if job.kind == "email":
-                    msg = EmailMessage()
-                    msg["From"] = os.getenv("MAIL_FROM", "vector@example.test")
-                    msg["To"] = job.payload["to"]
-                    msg["Subject"] = job.payload["subject"]
-                    msg.set_content(job.payload["body"])
-                    send_email(msg)
+                    send_email(build_message(job.payload))
                     # One-time links and message bodies need not remain in the outbox after delivery.
                     job.payload = {}
                 elif job.kind == "lms":
