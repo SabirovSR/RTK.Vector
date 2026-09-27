@@ -18,7 +18,7 @@ def fail(detail, code=400):
     raise HTTPException(code, detail)
 
 
-def current_user(request: Request, db=Depends(get_db)):
+def current_user(request: Request, db=Depends(get_db, scope="function")):
     raw = request.cookies.get("vector_session", "")
     session = db.scalar(
         select(Session).where(Session.token == digest(raw), Session.expires > now())
