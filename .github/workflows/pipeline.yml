@@ -120,8 +120,17 @@ jobs:
       cancel-in-progress: false
     permissions:
       packages: read
+      contents: read
     steps:
+      - name: Skip superseded release
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head=$(gh api repos/SabirovSR/RTK.Vector/git/ref/heads/main --jq .object.sha)
+          if [ "$head" = "$GITHUB_SHA" ]; then echo 'deploy=true' >> "$GITHUB_OUTPUT"; fi
       - name: Deploy with restricted SSH key
+        if: steps.current.outputs.deploy == 'true'
         env:
           DEPLOY_KEY: ${{ secrets.PROD_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}

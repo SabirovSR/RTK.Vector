@@ -14,9 +14,12 @@ services:
     user: "70:70"
     environment:
       POSTGRES_DB: vector
-      POSTGRES_USER: vector
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
-    volumes: ["postgres_data:/var/lib/postgresql/data"]
+      POSTGRES_USER: vector_bootstrap
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?required}
+      PGAPP_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+      - "/opt/vector/postgres-init.sh:/docker-entrypoint-initdb.d/10-vector.sh:ro"
     read_only: true
     tmpfs: ["/tmp", "/var/run/postgresql:uid=70,gid=70,mode=0770"]
     shm_size: 128mb

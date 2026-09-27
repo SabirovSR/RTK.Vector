@@ -6,6 +6,7 @@ for script in vector-deploy vector-backup vector-monitor vector-configure-mail; 
     install -m 0755 "$script" /usr/local/sbin/
 done
 install -m 0644 compose.production.yaml /opt/vector/
+install -m 0755 postgres-init.sh /opt/vector/
 install -m 0644 vector-*.service vector-*.timer /etc/systemd/system/
 printf 'restrict,command="/usr/local/bin/vector-deploy-dispatch" %s\n' "$(cat /root/vector-ci.pub)" > /etc/ssh/authorized_keys/vector-deploy
 chown root:root /etc/ssh/authorized_keys/vector-admin /etc/ssh/authorized_keys/vector-deploy
