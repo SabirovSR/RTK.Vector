@@ -410,10 +410,9 @@ def deal_detail(
                 .order_by(Proposal.version.desc())
             )
         ],
-        "activities": [
-            public(a)
-            for a in db.scalars(activities.order_by(Activity.created_at.desc()))
-        ],
+        "activities": present_activities(
+            db, user, db.scalars(activities.order_by(Activity.created_at.desc()))
+        ),
         "tasks": [public(t) for t in db.scalars(tasks)],
         "documents": [
             public(d, ("path",))
@@ -564,7 +563,46 @@ def comment(
         "Новый комментарий к программе",
         "school" if user.role == "university" else "university",
     )
-    return public(obj)
+    return activity_view(user, obj, user)
+
+
+@app.put(PREFIX + "/comments/{ident}")
+def edit_comment(
+    ident: int,
+    body: TextInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
+    obj, deal = comment_access(db, user, ident)
+    if body.text != obj.text:
+        obj.text = body.text
+        obj.edited = True
+        audit(db, user, "comment.update", obj)
+        notify(
+            db,
+            deal,
+            "Комментарий к программе изменён",
+            "school" if user.role == "university" else "university",
+        )
+    return activity_view(user, obj, user)
+
+
+@app.delete(PREFIX + "/comments/{ident}")
+def delete_comment(
+    ident: int,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
+    obj, deal = comment_access(db, user, ident)
+    audit(db, user, "comment.delete", obj)
+    notify(
+        db,
+        deal,
+        "Комментарий к программе удалён",
+        "school" if user.role == "university" else "university",
+    )
+    db.delete(obj)
+    return {"ok": True}
 
 
 @app.post(PREFIX + "/deals/{ident}/communications")

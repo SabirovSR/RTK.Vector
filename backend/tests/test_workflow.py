@@ -615,3 +615,38 @@ def test_restart_persists(school):
     new = new_deal(school)
     with SessionLocal() as db:
         assert db.get(Deal, new["id"]).title == new["title"]
+
+
+def test_comment_edit_delete_and_initials(school, university, other):
+    created = ok(
+        university.post(P + "/deals/1/comments", json={"text": "Уточните практику"})
+    )
+    assert created["author_initials"] == "ИЛ"
+    assert created["mine"] is True
+    assert created["edited"] is False
+    assert "actor_id" not in created
+    school_view = ok(school.get(P + "/deals/1"))
+    visible = next(a for a in school_view["activities"] if a["id"] == created["id"])
+    assert visible["author_initials"] == "ИЛ" and visible["mine"] is False
+    own = next(
+        a for a in school_view["activities"] if a["kind"] == "comment" and a["mine"]
+    )
+    assert own["author_initials"] == "АС"
+    assert (
+        school.put(
+            P + f"/comments/{created['id']}", json={"text": "Чужая правка"}
+        ).status_code
+        == 403
+    )
+    assert other.delete(P + f"/comments/{created['id']}").status_code == 404
+    assert university.delete(P + f"/comments/{own['id']}").status_code == 403
+    edited = ok(
+        university.put(
+            P + f"/comments/{created['id']}", json={"text": "Практика в сентябре"}
+        )
+    )
+    assert edited["edited"] is True and edited["text"] == "Практика в сентябре"
+    ok(university.delete(P + f"/comments/{created['id']}"))
+    assert all(
+        a["id"] != created["id"] for a in ok(school.get(P + "/deals/1"))["activities"]
+    )

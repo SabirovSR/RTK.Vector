@@ -332,6 +332,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/comments/{ident}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit Comment */
+        put: operations["edit_comment_api_v1_comments__ident__put"];
+        post?: never;
+        /** Delete Comment */
+        delete: operations["delete_comment_api_v1_comments__ident__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/deals/{ident}/communications": {
         parameters: {
             query?: never;
@@ -1728,6 +1746,72 @@ export interface operations {
                 "application/json": components["schemas"]["TextInput"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_comment_api_v1_comments__ident__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ident: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TextInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_comment_api_v1_comments__ident__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ident: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
