@@ -44,6 +44,14 @@ export const date = (value?: string) =>
       ).toLocaleDateString("ru-RU", { day: "numeric", month: "short" })
     : "Не указан";
 export const today = () => new Date().toLocaleDateString("sv-SE");
+export function initials(name: string, count = 1) {
+  const parts = name
+    .replace(/\[[^\]]*\]/g, " ")
+    .split(/[\s.]+/)
+    .map((part) => [...part].find((ch) => /\p{L}/u.test(ch)) || "")
+    .filter(Boolean);
+  return parts.slice(0, count).join("") || "?";
+}
 export function useData<T>(path: string) {
   return useQuery<T>({ queryKey: [path], queryFn: () => api<T>(path) });
 }

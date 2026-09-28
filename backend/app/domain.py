@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy import select, func
 from .models import *
 from .security import fail, school
@@ -189,3 +190,19 @@ def validate_transition(db, deal, target, reason):
         aggregate(db, g)["completed"] < aggregate(db, g)["students"] for g in groups
     ):
         fail("Не все студенты завершили обучение")
+
+
+def advance_approved(db, deal):
+    steps = []
+    while deal.stage in ("new", "qualification", "approval"):
+        target = STAGES[STAGES.index(deal.stage) + 1]
+        try:
+            validate_transition(db, deal, target, "Программа согласована вузом")
+        except HTTPException:
+            break
+        previous = deal.stage
+        deal.stage = target
+        steps.append((previous, target))
+        if target == "contract":
+            break
+    return steps

@@ -42,6 +42,7 @@ import {
   Empty,
   ErrorState,
   Loading,
+  initials,
   PageTitle,
   Progress,
   Section,
@@ -249,7 +250,9 @@ export function DealsPage({ user }: { user: User }) {
                             <Users size={13} />
                             {d.groups.reduce((n, g) => n + g.students, 0)}
                           </span>
-                          <span className="tiny-avatar">{user.name[0]}</span>
+                          <span className="tiny-avatar">
+                            {initials(user.name)}
+                          </span>
                         </div>
                       </Link>
                     ))}
@@ -711,34 +714,47 @@ export function DealPage({ user }: { user: User }) {
                   <span>Версия {proposal.version}</span>
                   <Badge value={proposal.status} />
                 </div>
-                <div className="proposal-content">{proposal.content}</div>
-                {proposal.comment && (
-                  <blockquote>{proposal.comment}</blockquote>
+                {!school && proposal.status === "approved" ? (
+                  <p className="muted">
+                    {["new", "qualification", "approval"].includes(d.stage)
+                      ? "Программа согласована и снята со страницы согласования."
+                      : "Программа согласована и передана дальше по цепочке сотрудничества."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="proposal-content">{proposal.content}</div>
+                    {proposal.comment && (
+                      <blockquote>{proposal.comment}</blockquote>
+                    )}
+                    {!school &&
+                      proposal.status === "pending" &&
+                      ["new", "qualification", "approval"].includes(
+                        d.stage,
+                      ) && (
+                        <div className="button-row">
+                          <Button
+                            disabled={action.busy}
+                            onClick={() =>
+                              action.run(
+                                "/proposals/" + proposal.id + "/decision",
+                                "POST",
+                                { status: "approved", comment: "" },
+                              )
+                            }
+                          >
+                            <Check size={16} />
+                            Согласовать
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditor("decision")}
+                          >
+                            Отправить замечания
+                          </Button>
+                        </div>
+                      )}
+                  </>
                 )}
-                {!school &&
-                  ["new", "qualification", "approval"].includes(d.stage) && (
-                    <div className="button-row">
-                      <Button
-                        disabled={action.busy}
-                        onClick={() =>
-                          action.run(
-                            "/proposals/" + proposal.id + "/decision",
-                            "POST",
-                            { status: "approved", comment: "" },
-                          )
-                        }
-                      >
-                        <Check size={16} />
-                        Согласовать
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setEditor("decision")}
-                      >
-                        Отправить замечания
-                      </Button>
-                    </div>
-                  )}
               </>
             ) : (
               <Empty>
@@ -754,7 +770,9 @@ export function DealPage({ user }: { user: User }) {
                   Версия {p.version}
                   <Badge value={p.status} />
                 </summary>
-                <p className="pre-wrap">{p.content}</p>
+                {(school || p.status !== "approved") && (
+                  <p className="pre-wrap">{p.content}</p>
+                )}
                 {p.comment && <blockquote>{p.comment}</blockquote>}
               </details>
             ))}
@@ -998,6 +1016,7 @@ export function DealPage({ user }: { user: User }) {
             {d.tasks?.map((t) => (
               <div className="task-row" key={t.id}>
                 <button
+                  type="button"
                   className={
                     "task-check " + (t.status === "done" ? "checked" : "")
                   }

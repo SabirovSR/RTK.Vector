@@ -244,8 +244,16 @@ test("full partnership cycle through both interfaces including invitation", asyn
     .click();
   await uni.getByRole("button", { name: "Согласовать", exact: true }).click();
   await expect(uni.getByText("Изменения сохранены")).toBeVisible();
+  await expect(
+    uni.getByRole("button", { name: "Согласовать", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    uni.getByText(
+      "Программа согласована и передана дальше по цепочке сотрудничества.",
+    ),
+  ).toBeVisible();
   await school.reload();
-  await changeStage(school, "contract");
+  await expect(school.locator(".deal-meta-bar .badge-contract")).toBeVisible();
   await changeStage(school, "preparation");
   for (const name of [
     "Передача учебных материалов",
@@ -269,13 +277,11 @@ test("full partnership cycle through both interfaces including invitation", asyn
     .getByRole("button", { name: "Загрузить документ", exact: true })
     .click();
   await uni.getByLabel("Тип документа").selectOption("signed_contract");
-  await uni
-    .locator("input[type=file]")
-    .setInputFiles({
-      name: "signed.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4\nE2E synthetic agreement"),
-    });
+  await uni.locator("input[type=file]").setInputFiles({
+    name: "signed.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4\nE2E synthetic agreement"),
+  });
   await uni
     .getByRole("dialog")
     .getByRole("button", { name: "Загрузить", exact: true })
