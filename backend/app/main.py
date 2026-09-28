@@ -526,6 +526,21 @@ def decide(
         )
     )
     notify(db, deal, "Вуз принял решение по программе: " + decision_label, "school")
+    if body.status == "approved":
+        db.flush()
+        for previous, target in advance_approved(db, deal):
+            db.add(
+                Activity(
+                    deal_id=deal.id,
+                    actor_id=user.id,
+                    kind="stage",
+                    text=f"{LABELS[previous]} → {LABELS[target]}. Программа согласована вузом",
+                    shared=True,
+                )
+            )
+            audit(db, user, "transition." + target, deal)
+        if deal.stage == "contract":
+            notify(db, deal, "Этап сотрудничества: " + LABELS["contract"], "university")
     audit(db, user, "proposal." + body.status, obj)
     return public(obj)
 

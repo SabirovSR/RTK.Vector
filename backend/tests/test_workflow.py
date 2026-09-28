@@ -88,7 +88,7 @@ def test_entire_cycle(school, university):
             P + f"/proposals/{proposal['id']}/decision", json={"status": "approved"}
         )
     )
-    ok(transition(school, ident, "contract"))
+    assert ok(school.get(P + f"/deals/{ident}"))["stage"] == "contract"
     ok(transition(school, ident, "preparation"))
     assert transition(school, ident, "training").status_code == 400
     document = ok(

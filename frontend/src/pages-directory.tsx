@@ -192,9 +192,25 @@ export function UniversitiesPage({ user }: { user: User }) {
               <span>
                 {u.editable ? "Ваше сотрудничество" : "Доступен для просмотра"}
               </span>
-              <Button variant="ghost" size="sm" onClick={() => setSelected(u)}>
-                Открыть <ArrowUpRight size={16} />
-              </Button>
+              <div className="card-actions">
+                {u.editable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditor(u)}
+                  >
+                    <Pencil size={15} />
+                    Редактировать
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelected(u)}
+                >
+                  Открыть <ArrowUpRight size={16} />
+                </Button>
+              </div>
             </div>
           </article>
         ))}
@@ -529,6 +545,7 @@ export function TasksPage({ user }: { user: User }) {
         {items.map((t) => (
           <div className="task-row" key={t.id}>
             <button
+              type="button"
               className={"task-check " + (t.status === "done" ? "checked" : "")}
               aria-label={
                 t.status === "done" ? "Вернуть задачу" : "Завершить задачу"

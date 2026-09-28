@@ -38,6 +38,7 @@ import {
   Empty,
   ErrorState,
   Loading,
+  initials,
   PageTitle,
   Progress,
   Section,
@@ -495,13 +496,7 @@ function Workspace({ user }: { user: User }) {
             Сервисы и подключения
           </a>
           <div className="user-card">
-            <span className="avatar">
-              {user.name
-                .split(" ")
-                .map((x) => x[0])
-                .slice(0, 2)
-                .join("")}
-            </span>
+            <span className="avatar">{initials(user.name, 2)}</span>
             <span>
               <strong>{user.name}</strong>
               <small>{school ? "Менеджер ИТ-школы" : "Менеджер вуза"}</small>
