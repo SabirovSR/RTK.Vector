@@ -19,6 +19,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   Upload,
   Users,
   X,
@@ -31,6 +32,7 @@ import type {
   Group,
   Participant,
   ImportPreview,
+  Activity,
 } from "./types";
 import { Button } from "./components/ui/button";
 import { Modal } from "./components/ui/dialog";
@@ -354,12 +356,58 @@ const prepLabels: Record<string, string> = {
   teachers: "Обучение преподавателей",
   curriculum: "Актуализация учебной программы",
 };
+function ActivityItem({
+  activity: a,
+  caption,
+  onEdit,
+  onDelete,
+}: {
+  activity: Activity;
+  caption?: string;
+  onEdit: (activity: Activity) => void;
+  onDelete: (activity: Activity) => void;
+}) {
+  return (
+    <div className="timeline-item">
+      <span className="avatar">{a.author_initials}</span>
+      <div>
+        <small>
+          {date(a.created_at)}
+          {caption ? ` · ${caption}` : ""}
+          {a.edited ? " · редактировано" : ""}
+        </small>
+        <p>{a.text}</p>
+      </div>
+      {a.mine && a.kind === "comment" && (
+        <div className="timeline-actions">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Редактировать комментарий"
+            onClick={() => onEdit(a)}
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Удалить комментарий"
+            onClick={() => onDelete(a)}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 export function DealPage({ user }: { user: User }) {
   const { id } = useParams(),
     data = useData<Deal>("/deals/" + id),
     programs = useData<Program[]>("/programs"),
     [tab, setTab] = useState("overview"),
     [editor, setEditor] = useState(""),
+    [comment, setComment] = useState<Activity | null>(null),
     [group, setGroup] = useState<Group | null>(null),
     [expansionId, setExpansionId] = useState<number | null>(null),
     action = useAction(),
@@ -380,6 +428,10 @@ export function DealPage({ user }: { user: User }) {
     preparation: d.preparation,
     notes: d.notes || "",
   };
+  function removeComment(item: Activity) {
+    if (!window.confirm("Удалить комментарий?")) return;
+    action.run("/comments/" + item.id, "DELETE");
+  }
   return (
     <>
       <Link className="back-link" to="/deals">
@@ -796,13 +848,12 @@ export function DealPage({ user }: { user: User }) {
                 ["comment", "decision", "feedback"].includes(a.kind),
               )
               .map((a) => (
-                <div className="timeline-item" key={a.id}>
-                  <span className="timeline-dot" />
-                  <div>
-                    <small>{date(a.created_at)}</small>
-                    <p>{a.text}</p>
-                  </div>
-                </div>
+                <ActivityItem
+                  key={a.id}
+                  activity={a}
+                  onEdit={setComment}
+                  onDelete={removeComment}
+                />
               ))}
           </Section>
         </div>
@@ -983,16 +1034,15 @@ export function DealPage({ user }: { user: User }) {
           >
             {d.activities?.length ? (
               d.activities.map((a) => (
-                <div className="timeline-item" key={a.id}>
-                  <span className="timeline-dot" />
-                  <div>
-                    <small>
-                      {date(a.created_at)} ·{" "}
-                      {a.shared ? "Совместная история" : "Внутренняя запись"}
-                    </small>
-                    <p>{a.text}</p>
-                  </div>
-                </div>
+                <ActivityItem
+                  key={a.id}
+                  activity={a}
+                  caption={
+                    a.shared ? "Совместная история" : "Внутренняя запись"
+                  }
+                  onEdit={setComment}
+                  onDelete={removeComment}
+                />
               ))
             ) : (
               <Empty>Здесь будет история договорённостей</Empty>
@@ -1207,6 +1257,15 @@ export function DealPage({ user }: { user: User }) {
               v,
             )
           }
+        />
+      )}
+      {comment && (
+        <Editor
+          title="Редактировать комментарий"
+          fields={[{ name: "text", label: "Ваше сообщение", type: "textarea" }]}
+          initial={{ text: comment.text }}
+          onClose={() => setComment(null)}
+          onSave={(v) => save("/comments/" + comment.id, "PUT", v)}
         />
       )}
       {editor === "group" && (

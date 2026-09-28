@@ -2041,6 +2041,20 @@ td .text-link {
   gap: 14px;
   padding: 13px 0;
 }
+.timeline-item > div {
+  flex: 1;
+  min-width: 0;
+}
+.timeline-item .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+.timeline-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
 .timeline-dot {
   width: 8px;
   height: 8px;

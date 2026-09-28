@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import re
 from sqlalchemy import select, func
 from .models import *
 from .security import fail, school
@@ -190,6 +191,47 @@ def validate_transition(db, deal, target, reason):
         aggregate(db, g)["completed"] < aggregate(db, g)["students"] for g in groups
     ):
         fail("Не все студенты завершили обучение")
+
+
+def person_initials(name, count=2):
+    cleaned = re.sub(r"\[[^\]]*\]", " ", name or "")
+    letters = []
+    for part in re.split(r"[\s.]+", cleaned):
+        letter = next((ch for ch in part if ch.isalpha()), "")
+        if letter:
+            letters.append(letter)
+        if len(letters) >= count:
+            break
+    return "".join(letters) or "?"
+
+
+def activity_view(user, activity, author):
+    return public(activity, ("actor_id",)) | {
+        "author_initials": person_initials(author.name if author else ""),
+        "mine": activity.actor_id == user.id,
+    }
+
+
+def present_activities(db, user, rows):
+    rows = list(rows)
+    ids = {row.actor_id for row in rows}
+    people = (
+        {
+            person.id: person
+            for person in db.scalars(select(User).where(User.id.in_(ids)))
+        }
+        if ids
+        else {}
+    )
+    return [activity_view(user, row, people.get(row.actor_id)) for row in rows]
+
+
+def comment_access(db, user, ident):
+    obj = record(db, Activity, ident, lock=True)
+    deal = deal_access(db, user, obj.deal_id)
+    if obj.kind != "comment" or obj.actor_id != user.id:
+        fail("Можно изменить только свой комментарий", 403)
+    return obj, deal
 
 
 def advance_approved(db, deal):
