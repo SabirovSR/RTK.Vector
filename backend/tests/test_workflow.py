@@ -617,6 +617,43 @@ def test_restart_persists(school):
         assert db.get(Deal, new["id"]).title == new["title"]
 
 
+def test_program_tools_and_decision_duplicates(school, university):
+    tools = {p["name"]: p["tools"] for p in ok(school.get(P + "/programs"))}
+    assert tools["Инженер-тестировщик"] == "Автотестирование"
+    assert tools["Управление ИТ-проектами"] == "Управление задачами"
+    assert "Яга" not in tools.values()
+    detail = ok(university.get(P + "/deals/1"))
+    proposal_id = detail["proposals"][0]["id"]
+    ok(
+        university.post(
+            P + f"/proposals/{proposal_id}/decision", json={"status": "approved"}
+        )
+    )
+    assert (
+        university.post(
+            P + f"/proposals/{proposal_id}/decision", json={"status": "approved"}
+        ).status_code
+        == 409
+    )
+    with SessionLocal() as db:
+        db.add(
+            Activity(
+                deal_id=1,
+                actor_id=2,
+                kind="decision",
+                text="Версия 1: Согласовано.",
+                shared=True,
+            )
+        )
+        db.commit()
+    decisions = [
+        a
+        for a in ok(university.get(P + "/deals/1"))["activities"]
+        if a["kind"] == "decision" and "Согласовано" in a["text"]
+    ]
+    assert len(decisions) == 1
+
+
 def test_comment_edit_delete_and_initials(school, university, other):
     created = ok(
         university.post(P + "/deals/1/comments", json={"text": "Уточните практику"})

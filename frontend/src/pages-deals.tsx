@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -57,6 +62,7 @@ import {
 } from "./components/common";
 
 export function DealsPage({ user }: { user: User }) {
+  const [params] = useSearchParams();
   const data = useData<Deal[]>("/deals"),
     unis = useData<University[]>("/universities"),
     programs = useData<Program[]>("/programs"),
@@ -64,7 +70,7 @@ export function DealsPage({ user }: { user: User }) {
     [search, setSearch] = useState(""),
     [stage, setStage] = useState(""),
     [uni, setUni] = useState(""),
-    [program, setProgram] = useState(""),
+    [program, setProgram] = useState(params.get("program") ?? ""),
     [deadline, setDeadline] = useState(""),
     [create, setCreate] = useState(false),
     save = useSave(),
