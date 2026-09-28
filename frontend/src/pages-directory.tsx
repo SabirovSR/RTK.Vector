@@ -21,6 +21,7 @@ import type {
   University,
   Contact,
   Program,
+  Deal,
   Task,
   Report,
   Job,
@@ -389,6 +390,7 @@ function UniversityDetails({
 }
 export function ProgramsPage({ user }: { user: User }) {
   const data = useData<Program[]>("/programs"),
+    deals = useData<Deal[]>("/deals"),
     [search, setSearch] = useState(""),
     [edit, setEdit] = useState(false),
     [vendors, setVendors] = useState(false),
@@ -432,26 +434,41 @@ export function ProgramsPage({ user }: { user: User }) {
           ?.filter((p) =>
             (p.name + p.direction).toLowerCase().includes(search.toLowerCase()),
           )
-          .map((p, i) => (
-            <article className="program-card" key={p.id}>
-              <div className={"program-art art-" + (i % 3)}>
-                <span>РТК / ОБРАЗОВАНИЕ</span>
-                <BookOpen size={65} strokeWidth={1} />
-                <small>0{i + 1}</small>
-              </div>
-              <div className="program-body">
-                <span className="eyebrow">{p.direction}</span>
-                <h2>{p.name}</h2>
-                <p>{p.competencies}</p>
-                <div className="tags">
-                  <span>{p.tools}</span>
+          .map((p, i) => {
+            const related = (deals.data || []).filter(
+              (d) => d.program_id === p.id,
+            );
+            const cooperation =
+              related.length === 1
+                ? "/deals/" + related[0].id
+                : related.length > 1
+                  ? "/deals?program=" + p.id
+                  : "";
+            return (
+              <article className="program-card" key={p.id}>
+                <div className={"program-art art-" + (i % 3)}>
+                  <span>РТК / ОБРАЗОВАНИЕ</span>
+                  <BookOpen size={65} strokeWidth={1} />
+                  <small>0{i + 1}</small>
                 </div>
-                <Link className="text-link" to="/deals">
-                  Перейти к сотрудничеству <ArrowUpRight size={16} />
-                </Link>
-              </div>
-            </article>
-          ))}
+                <div className="program-body">
+                  <span className="eyebrow">{p.direction}</span>
+                  <h2>{p.name}</h2>
+                  <p>{p.competencies}</p>
+                  <div className="tags">
+                    <span>{p.tools}</span>
+                  </div>
+                  {deals.isLoading ? null : cooperation ? (
+                    <Link className="text-link" to={cooperation}>
+                      Перейти к сотрудничеству <ArrowUpRight size={16} />
+                    </Link>
+                  ) : (
+                    <span className="muted">Сотрудничество ещё не открыто</span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
       </div>
       {edit && (
         <Editor

@@ -100,7 +100,7 @@ def seed(db):
                 "Разработка",
             ][i],
             competencies="Практические навыки, командный проект, итоговая оценка",
-            tools=["RT.DataVision", "Яга", "Яга", "Web3Gate", "Python"][i],
+            tools=["RT.DataVision", "Автотестирование", "Управление задачами", "Web3Gate", "Python"][i],
         )
         db.add(p)
         db.flush()

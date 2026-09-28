@@ -223,7 +223,20 @@ def present_activities(db, user, rows):
         if ids
         else {}
     )
-    return [activity_view(user, row, people.get(row.actor_id)) for row in rows]
+    paired = [
+        (row, activity_view(user, row, people.get(row.actor_id))) for row in rows
+    ]
+    seen = set()
+    kept = []
+    for row, view in reversed(paired):
+        if row.kind == "decision":
+            key = (row.deal_id, " ".join(row.text.split()))
+            if key in seen:
+                continue
+            seen.add(key)
+        kept.append(view)
+    kept.reverse()
+    return kept
 
 
 def comment_access(db, user, ident):
