@@ -59,6 +59,9 @@ export interface Activity {
   text: string;
   shared: boolean;
   created_at: string;
+  edited: boolean;
+  mine: boolean;
+  author_initials: string;
 }
 export interface Document {
   id: number;
