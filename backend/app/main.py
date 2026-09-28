@@ -507,6 +507,8 @@ def decide(
         "approval",
     ):
         fail("Эта версия больше не принимает решения", 409)
+    if obj.status != "pending":
+        fail("Эта версия больше не принимает решения", 409)
     if body.status != "approved" and not body.comment.strip():
         fail("Добавьте комментарий к решению")
     obj.status, obj.comment = body.status, body.comment
@@ -515,12 +517,15 @@ def decide(
         "changes": "Нужны изменения",
         "rejected": "Отклонено",
     }[body.status]
+    decision_text = f"Версия {obj.version}: {decision_label}."
+    if body.comment.strip():
+        decision_text += " " + body.comment.strip()
     db.add(
         Activity(
             deal_id=deal.id,
             actor_id=user.id,
             kind="decision",
-            text=f"Версия {obj.version}: {decision_label}. {body.comment}",
+            text=decision_text,
             shared=True,
         )
     )
