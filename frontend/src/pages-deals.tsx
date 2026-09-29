@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,6 +24,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   Upload,
   Users,
   X,
@@ -31,6 +37,7 @@ import type {
   Group,
   Participant,
   ImportPreview,
+  Activity,
 } from "./types";
 import { Button } from "./components/ui/button";
 import { Modal } from "./components/ui/dialog";
@@ -42,6 +49,7 @@ import {
   Empty,
   ErrorState,
   Loading,
+  initials,
   PageTitle,
   Progress,
   Section,
@@ -54,6 +62,7 @@ import {
 } from "./components/common";
 
 export function DealsPage({ user }: { user: User }) {
+  const [params] = useSearchParams();
   const data = useData<Deal[]>("/deals"),
     unis = useData<University[]>("/universities"),
     programs = useData<Program[]>("/programs"),
@@ -61,7 +70,7 @@ export function DealsPage({ user }: { user: User }) {
     [search, setSearch] = useState(""),
     [stage, setStage] = useState(""),
     [uni, setUni] = useState(""),
-    [program, setProgram] = useState(""),
+    [program, setProgram] = useState(params.get("program") ?? ""),
     [deadline, setDeadline] = useState(""),
     [create, setCreate] = useState(false),
     save = useSave(),
@@ -249,7 +258,9 @@ export function DealsPage({ user }: { user: User }) {
                             <Users size={13} />
                             {d.groups.reduce((n, g) => n + g.students, 0)}
                           </span>
-                          <span className="tiny-avatar">{user.name[0]}</span>
+                          <span className="tiny-avatar">
+                            {initials(user.name)}
+                          </span>
                         </div>
                       </Link>
                     ))}
@@ -351,12 +362,58 @@ const prepLabels: Record<string, string> = {
   teachers: "Обучение преподавателей",
   curriculum: "Актуализация учебной программы",
 };
+function ActivityItem({
+  activity: a,
+  caption,
+  onEdit,
+  onDelete,
+}: {
+  activity: Activity;
+  caption?: string;
+  onEdit: (activity: Activity) => void;
+  onDelete: (activity: Activity) => void;
+}) {
+  return (
+    <div className="timeline-item">
+      <span className="avatar">{a.author_initials}</span>
+      <div>
+        <small>
+          {date(a.created_at)}
+          {caption ? ` · ${caption}` : ""}
+          {a.edited ? " · редактировано" : ""}
+        </small>
+        <p>{a.text}</p>
+      </div>
+      {a.mine && a.kind === "comment" && (
+        <div className="timeline-actions">
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Редактировать комментарий"
+            onClick={() => onEdit(a)}
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Удалить комментарий"
+            onClick={() => onDelete(a)}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 export function DealPage({ user }: { user: User }) {
   const { id } = useParams(),
     data = useData<Deal>("/deals/" + id),
     programs = useData<Program[]>("/programs"),
     [tab, setTab] = useState("overview"),
     [editor, setEditor] = useState(""),
+    [comment, setComment] = useState<Activity | null>(null),
     [group, setGroup] = useState<Group | null>(null),
     [expansionId, setExpansionId] = useState<number | null>(null),
     action = useAction(),
@@ -377,6 +434,10 @@ export function DealPage({ user }: { user: User }) {
     preparation: d.preparation,
     notes: d.notes || "",
   };
+  function removeComment(item: Activity) {
+    if (!window.confirm("Удалить комментарий?")) return;
+    action.run("/comments/" + item.id, "DELETE");
+  }
   return (
     <>
       <Link className="back-link" to="/deals">
@@ -711,34 +772,47 @@ export function DealPage({ user }: { user: User }) {
                   <span>Версия {proposal.version}</span>
                   <Badge value={proposal.status} />
                 </div>
-                <div className="proposal-content">{proposal.content}</div>
-                {proposal.comment && (
-                  <blockquote>{proposal.comment}</blockquote>
+                {!school && proposal.status === "approved" ? (
+                  <p className="muted">
+                    {["new", "qualification", "approval"].includes(d.stage)
+                      ? "Программа согласована и снята со страницы согласования."
+                      : "Программа согласована и передана дальше по цепочке сотрудничества."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="proposal-content">{proposal.content}</div>
+                    {proposal.comment && (
+                      <blockquote>{proposal.comment}</blockquote>
+                    )}
+                    {!school &&
+                      proposal.status === "pending" &&
+                      ["new", "qualification", "approval"].includes(
+                        d.stage,
+                      ) && (
+                        <div className="button-row">
+                          <Button
+                            disabled={action.busy}
+                            onClick={() =>
+                              action.run(
+                                "/proposals/" + proposal.id + "/decision",
+                                "POST",
+                                { status: "approved", comment: "" },
+                              )
+                            }
+                          >
+                            <Check size={16} />
+                            Согласовать
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditor("decision")}
+                          >
+                            Отправить замечания
+                          </Button>
+                        </div>
+                      )}
+                  </>
                 )}
-                {!school &&
-                  ["new", "qualification", "approval"].includes(d.stage) && (
-                    <div className="button-row">
-                      <Button
-                        disabled={action.busy}
-                        onClick={() =>
-                          action.run(
-                            "/proposals/" + proposal.id + "/decision",
-                            "POST",
-                            { status: "approved", comment: "" },
-                          )
-                        }
-                      >
-                        <Check size={16} />
-                        Согласовать
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setEditor("decision")}
-                      >
-                        Отправить замечания
-                      </Button>
-                    </div>
-                  )}
               </>
             ) : (
               <Empty>
@@ -754,7 +828,9 @@ export function DealPage({ user }: { user: User }) {
                   Версия {p.version}
                   <Badge value={p.status} />
                 </summary>
-                <p className="pre-wrap">{p.content}</p>
+                {(school || p.status !== "approved") && (
+                  <p className="pre-wrap">{p.content}</p>
+                )}
                 {p.comment && <blockquote>{p.comment}</blockquote>}
               </details>
             ))}
@@ -778,13 +854,12 @@ export function DealPage({ user }: { user: User }) {
                 ["comment", "decision", "feedback"].includes(a.kind),
               )
               .map((a) => (
-                <div className="timeline-item" key={a.id}>
-                  <span className="timeline-dot" />
-                  <div>
-                    <small>{date(a.created_at)}</small>
-                    <p>{a.text}</p>
-                  </div>
-                </div>
+                <ActivityItem
+                  key={a.id}
+                  activity={a}
+                  onEdit={setComment}
+                  onDelete={removeComment}
+                />
               ))}
           </Section>
         </div>
@@ -965,16 +1040,15 @@ export function DealPage({ user }: { user: User }) {
           >
             {d.activities?.length ? (
               d.activities.map((a) => (
-                <div className="timeline-item" key={a.id}>
-                  <span className="timeline-dot" />
-                  <div>
-                    <small>
-                      {date(a.created_at)} ·{" "}
-                      {a.shared ? "Совместная история" : "Внутренняя запись"}
-                    </small>
-                    <p>{a.text}</p>
-                  </div>
-                </div>
+                <ActivityItem
+                  key={a.id}
+                  activity={a}
+                  caption={
+                    a.shared ? "Совместная история" : "Внутренняя запись"
+                  }
+                  onEdit={setComment}
+                  onDelete={removeComment}
+                />
               ))
             ) : (
               <Empty>Здесь будет история договорённостей</Empty>
@@ -998,6 +1072,7 @@ export function DealPage({ user }: { user: User }) {
             {d.tasks?.map((t) => (
               <div className="task-row" key={t.id}>
                 <button
+                  type="button"
                   className={
                     "task-check " + (t.status === "done" ? "checked" : "")
                   }
@@ -1188,6 +1263,15 @@ export function DealPage({ user }: { user: User }) {
               v,
             )
           }
+        />
+      )}
+      {comment && (
+        <Editor
+          title="Редактировать комментарий"
+          fields={[{ name: "text", label: "Ваше сообщение", type: "textarea" }]}
+          initial={{ text: comment.text }}
+          onClose={() => setComment(null)}
+          onSave={(v) => save("/comments/" + comment.id, "PUT", v)}
         />
       )}
       {editor === "group" && (

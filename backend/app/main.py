@@ -410,10 +410,9 @@ def deal_detail(
                 .order_by(Proposal.version.desc())
             )
         ],
-        "activities": [
-            public(a)
-            for a in db.scalars(activities.order_by(Activity.created_at.desc()))
-        ],
+        "activities": present_activities(
+            db, user, db.scalars(activities.order_by(Activity.created_at.desc()))
+        ),
         "tasks": [public(t) for t in db.scalars(tasks)],
         "documents": [
             public(d, ("path",))
@@ -508,6 +507,8 @@ def decide(
         "approval",
     ):
         fail("Эта версия больше не принимает решения", 409)
+    if obj.status != "pending":
+        fail("Эта версия больше не принимает решения", 409)
     if body.status != "approved" and not body.comment.strip():
         fail("Добавьте комментарий к решению")
     obj.status, obj.comment = body.status, body.comment
@@ -516,16 +517,34 @@ def decide(
         "changes": "Нужны изменения",
         "rejected": "Отклонено",
     }[body.status]
+    decision_text = f"Версия {obj.version}: {decision_label}."
+    if body.comment.strip():
+        decision_text += " " + body.comment.strip()
     db.add(
         Activity(
             deal_id=deal.id,
             actor_id=user.id,
             kind="decision",
-            text=f"Версия {obj.version}: {decision_label}. {body.comment}",
+            text=decision_text,
             shared=True,
         )
     )
     notify(db, deal, "Вуз принял решение по программе: " + decision_label, "school")
+    if body.status == "approved":
+        db.flush()
+        for previous, target in advance_approved(db, deal):
+            db.add(
+                Activity(
+                    deal_id=deal.id,
+                    actor_id=user.id,
+                    kind="stage",
+                    text=f"{LABELS[previous]} → {LABELS[target]}. Программа согласована вузом",
+                    shared=True,
+                )
+            )
+            audit(db, user, "transition." + target, deal)
+        if deal.stage == "contract":
+            notify(db, deal, "Этап сотрудничества: " + LABELS["contract"], "university")
     audit(db, user, "proposal." + body.status, obj)
     return public(obj)
 
@@ -549,7 +568,46 @@ def comment(
         "Новый комментарий к программе",
         "school" if user.role == "university" else "university",
     )
-    return public(obj)
+    return activity_view(user, obj, user)
+
+
+@app.put(PREFIX + "/comments/{ident}")
+def edit_comment(
+    ident: int,
+    body: TextInput,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
+    obj, deal = comment_access(db, user, ident)
+    if body.text != obj.text:
+        obj.text = body.text
+        obj.edited = True
+        audit(db, user, "comment.update", obj)
+        notify(
+            db,
+            deal,
+            "Комментарий к программе изменён",
+            "school" if user.role == "university" else "university",
+        )
+    return activity_view(user, obj, user)
+
+
+@app.delete(PREFIX + "/comments/{ident}")
+def delete_comment(
+    ident: int,
+    user=Depends(current_user),
+    db=Depends(get_db, scope="function"),
+):
+    obj, deal = comment_access(db, user, ident)
+    audit(db, user, "comment.delete", obj)
+    notify(
+        db,
+        deal,
+        "Комментарий к программе удалён",
+        "school" if user.role == "university" else "university",
+    )
+    db.delete(obj)
+    return {"ok": True}
 
 
 @app.post(PREFIX + "/deals/{ident}/communications")

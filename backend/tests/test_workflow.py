@@ -88,7 +88,7 @@ def test_entire_cycle(school, university):
             P + f"/proposals/{proposal['id']}/decision", json={"status": "approved"}
         )
     )
-    ok(transition(school, ident, "contract"))
+    assert ok(school.get(P + f"/deals/{ident}"))["stage"] == "contract"
     ok(transition(school, ident, "preparation"))
     assert transition(school, ident, "training").status_code == 400
     document = ok(
@@ -615,3 +615,75 @@ def test_restart_persists(school):
     new = new_deal(school)
     with SessionLocal() as db:
         assert db.get(Deal, new["id"]).title == new["title"]
+
+
+def test_program_tools_and_decision_duplicates(school, university):
+    tools = {p["name"]: p["tools"] for p in ok(school.get(P + "/programs"))}
+    assert tools["Инженер-тестировщик"] == "Автотестирование"
+    assert tools["Управление ИТ-проектами"] == "Управление задачами"
+    assert "Яга" not in tools.values()
+    detail = ok(university.get(P + "/deals/1"))
+    proposal_id = detail["proposals"][0]["id"]
+    ok(
+        university.post(
+            P + f"/proposals/{proposal_id}/decision", json={"status": "approved"}
+        )
+    )
+    assert (
+        university.post(
+            P + f"/proposals/{proposal_id}/decision", json={"status": "approved"}
+        ).status_code
+        == 409
+    )
+    with SessionLocal() as db:
+        db.add(
+            Activity(
+                deal_id=1,
+                actor_id=2,
+                kind="decision",
+                text="Версия 1: Согласовано.",
+                shared=True,
+            )
+        )
+        db.commit()
+    decisions = [
+        a
+        for a in ok(university.get(P + "/deals/1"))["activities"]
+        if a["kind"] == "decision" and "Согласовано" in a["text"]
+    ]
+    assert len(decisions) == 1
+
+
+def test_comment_edit_delete_and_initials(school, university, other):
+    created = ok(
+        university.post(P + "/deals/1/comments", json={"text": "Уточните практику"})
+    )
+    assert created["author_initials"] == "ИЛ"
+    assert created["mine"] is True
+    assert created["edited"] is False
+    assert "actor_id" not in created
+    school_view = ok(school.get(P + "/deals/1"))
+    visible = next(a for a in school_view["activities"] if a["id"] == created["id"])
+    assert visible["author_initials"] == "ИЛ" and visible["mine"] is False
+    own = next(
+        a for a in school_view["activities"] if a["kind"] == "comment" and a["mine"]
+    )
+    assert own["author_initials"] == "АС"
+    assert (
+        school.put(
+            P + f"/comments/{created['id']}", json={"text": "Чужая правка"}
+        ).status_code
+        == 403
+    )
+    assert other.delete(P + f"/comments/{created['id']}").status_code == 404
+    assert university.delete(P + f"/comments/{own['id']}").status_code == 403
+    edited = ok(
+        university.put(
+            P + f"/comments/{created['id']}", json={"text": "Практика в сентябре"}
+        )
+    )
+    assert edited["edited"] is True and edited["text"] == "Практика в сентябре"
+    ok(university.delete(P + f"/comments/{created['id']}"))
+    assert all(
+        a["id"] != created["id"] for a in ok(school.get(P + "/deals/1"))["activities"]
+    )

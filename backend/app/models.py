@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, JSON, Text, UniqueConstraint
+from sqlalchemy import String, ForeignKey, JSON, Text, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base, now
 
@@ -111,6 +111,7 @@ class Activity(Identity, Base):
     kind: Mapped[str]
     text: Mapped[str] = mapped_column(Text)
     shared: Mapped[bool] = mapped_column(default=False)
+    edited: Mapped[bool] = mapped_column(default=False, server_default=false())
 
 
 class Task(Identity, Base):
